@@ -1,0 +1,335 @@
+HTML
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>36 Daireli Bina Kasa Otomasyonu</title>
+    <!-- Excel indirme kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Grafik çizim kütüphanesi (Chart.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2, h3 {
+            color: #1e293b;
+            text-align: center;
+        }
+        
+        /* Üst Panel: Özet Kartları ve Grafik Yan Yana */
+        .ust-panel {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .ozet-paneli {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 250px;
+        }
+        .kart {
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .gelir-kart { background-color: #10b981; }
+        .gider-kart { background-color: #ef4444; }
+        .kasa-kart { background-color: #3b82f6; }
+        
+        .grafik-alani {
+            flex: 1;
+            min-width: 300px;
+            max-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Form Alanı */
+        .form-grup {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        input, select, button {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        input[type="text"] { flex: 2; min-width: 200px; }
+        input[type="number"], input[type="date"], select { flex: 1; min-width: 120px; }
+        
+        .ekle-btn {
+            background-color: #10b981;
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+            flex: 1;
+        }
+        .ekle-btn:hover { background-color: #059669; }
+
+        .excel-btn {
+            background-color: #059669;
+            color: white;
+            padding: 12px 24px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            display: block;
+            margin: 0 auto 25px auto;
+            font-size: 16px;
+        }
+        .excel-btn:hover { background-color: #047857; }
+
+        /* Tablo Alanı */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th { background-color: #f1f5f9; color: #475569; }
+        .tur-gelir { color: #10b981; font-weight: bold; }
+        .tur-gider { color: #ef4444; font-weight: bold; }
+        
+        .sil-btn {
+            background-color: #fda4af;
+            color: #9f1239;
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .sil-btn:hover { background-color: #f43f5e; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>36 Daireli Bina Otomasyon Kasa Sistemi</h2>
+
+    <!-- Üst Panel: Kartlar ve Grafik -->
+    <div class="ust-panel">
+        <div class="ozet-paneli">
+            <div class="kart gelir-kart">Toplam Gelir: <span id="topGelir">0.00</span> TL</div>
+            <div class="kart gider-kart">Toplam Gider: <span id="topGider">0.00</span> TL</div>
+            <div class="kart kasa-kart">Kasa Bakiyesi: <span id="netKasa">0.00</span> TL</div>
+        </div>
+        <div class="grafik-alani">
+            <canvas id="kasaGrafik"></canvas>
+        </div>
+    </div>
+
+    <!-- İşlem Ekleme Formu -->
+    <h3>Yeni İşlem Kaydı</h3>
+    <div class="form-grup">
+        <input type="date" id="tarih">
+        <select id="daire">
+            <option value="Genel Gider">Genel Gider / Ortak Alan</option>
+            <!-- JavaScript buraya 1'den 36'ya kadar otomatik daire ekleyecek -->
+        </select>
+        <select id="tur">
+            <option value="gelir">Gelir (+)</option>
+            <option value="gider">Gider (-)</option>
+        </select>
+        <input type="text" id="aciklama" placeholder="Açıklama (Örn: Ocak Ayı Aidatı, Diyafon Tamiri)">
+        <input type="number" id="tutar" placeholder="Tutar (TL)" min="0">
+        <button class="ekle-btn" onclick="islemEkle()">Kayıt Ekle</button>
+    </div>
+
+    <button class="excel-btn" onclick="excelIndir()">📊 Excel Dosyası Olarak İndir</button>
+
+    <!-- İşlem Geçmişi Tablosu -->
+    <h3>Kasa Hareket Planı</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Tarih</th>
+                <th>Daire / Yer</th>
+                <th>Tür</th>
+                <th>Açıklama</th>
+                <th>Tutar</th>
+                <th>İşlem</th>
+            </tr>
+        </thead>
+        <tbody id="islemListesi">
+            <!-- Kayıtlar buraya listelenecek -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let islemler = JSON.parse(localStorage.getItem('binaIslemleri36Daire')) || [];
+    let myChart = null;
+
+    // Sayfa açıldığında 1'den 36'ya kadar daireleri listeye otomatik ekle
+    const daireSelect = document.getElementById('daire');
+    for (let i = 1; i <= 36; i++) {
+        const opt = document.createElement('option');
+        opt.value = `Daire ${i}`;
+        opt.innerText = `Daire ${i}`;
+        daireSelect.appendChild(opt);
+    }
+
+    // Bugünü otomatik tarih seç
+    document.getElementById('tarih').valueAsDate = new Date();
+
+    function grafikGuncelle(gelir, gider) {
+        const ctx = document.getElementById('kasaGrafik').getContext('2d');
+        
+        if (myChart) {
+            myChart.destroy(); // Eski grafiği temizle yoksa üst üste biner
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Toplam Gelir', 'Toplam Gider'],
+                datasets: [{
+                    data: [gelir, gider],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    function guncelle() {
+        const liste = document.getElementById('islemListesi');
+        liste.innerHTML = '';
+        
+        let totalGelir = 0;
+        let totalGider = 0;
+
+        // Tarihe göre sıralama (en yeni en üstte)
+        islemler.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
+
+        islemler.forEach((islem, index) => {
+            const tutarNum = parseFloat(islem.tutar);
+            if(islem.tur === 'gelir') {
+                totalGelir += tutarNum;
+            } else {
+                totalGider += tutarNum;
+            }
+
+            const formatliTarih = new Date(islem.tarih).toLocaleDateString('tr-TR');
+
+            const row = `<tr>
+                <td>${formatliTarih}</td>
+                <td>${islem.daire}</td>
+                <td class="tur-${islem.tur}">${islem.tur === 'gelir' ? 'GELİR' : 'GİDER'}</td>
+                <td>${islem.aciklama}</td>
+                <td>${tutarNum.toFixed(2)} TL</td>
+                <td><button class="sil-btn" onclick="islemSil(${index})">Sil</button></td>
+            </tr>`;
+            liste.innerHTML += row;
+        });
+
+        const netKasa = totalGelir - totalGider;
+
+        document.getElementById('topGelir').innerText = totalGelir.toFixed(2);
+        document.getElementById('topGider').innerText = totalGider.toFixed(2);
+        document.getElementById('netKasa').innerText = netKasa.toFixed(2);
+
+        // Grafiği ve yerel hafızayı güncelle
+        grafikGuncelle(totalGelir, totalGider);
+        localStorage.setItem('binaIslemleri36Daire', JSON.stringify(islemler));
+    }
+
+    function islemEkle() {
+        const tarih = document.getElementById('tarih').value;
+        const daire = document.getElementById('daire').value;
+        const tur = document.getElementById('tur').value;
+        const aciklama = document.getElementById('aciklama').value;
+        const tutar = document.getElementById('tutar').value;
+
+        if(!tarih || !aciklama || !tutar) {
+            alert('Lütfen boş alanları doldurunuz!');
+            return;
+        }
+
+        islemler.push({ tarih, daire, tur, aciklama, tutar });
+        guncelle();
+
+        document.getElementById('aciklama').value = '';
+        document.getElementById('tutar').value = '';
+    }
+
+    function islemSil(index) {
+        if(confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
+            islemler.splice(index, 1);
+            guncelle();
+        }
+    }
+
+    function excelIndir() {
+        if(islemler.length === 0) {
+            alert('İndirilecek veri bulunamadı!');
+            return;
+        }
+        
+        const excelVerisi = islemler.map(islem => ({
+            "Tarih": new Date(islem.tarih).toLocaleDateString('tr-TR'),
+            "Daire / Yer": islem.daire,
+            "İşlem Türü": islem.tur === 'gelir' ? 'Gelir (+)' : 'Gider (-)',
+            "Açıklama": islem.aciklama,
+            "Tutar (TL)": parseFloat(islem.tutar)
+        }));
+
+        const s2c = XLSX.utils.json_to_sheet(excelVerisi);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, s2c, "Bina Kasa Defteri");
+        XLSX.writeFile(wb, "36_Daire_Bina_Kasa_Raporu.xlsx");
+    }
+
+    // Programı çalıştır
+    guncelle();
+</script>
+
+</body>
+</html>
