@@ -1,13 +1,10 @@
-HTML
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>36 Daireli Bina Kasa Otomasyonu</title>
-    <!-- Excel indirme kütüphanesi -->
+    <title>Canlı Bağlantılı Bina Kasa Otomasyonu</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Grafik çizim kütüphanesi (Chart.js) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -29,7 +26,6 @@ HTML
             text-align: center;
         }
         
-        /* Üst Panel: Özet Kartları ve Grafik Yan Yana */
         .ust-panel {
             display: flex;
             gap: 20px;
@@ -69,7 +65,6 @@ HTML
             border: 1px solid #e2e8f0;
         }
 
-        /* Form Alanı */
         .form-grup {
             display: flex;
             gap: 10px;
@@ -113,7 +108,6 @@ HTML
         }
         .excel-btn:hover { background-color: #047857; }
 
-        /* Tablo Alanı */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -139,14 +133,21 @@ HTML
             font-weight: 500;
         }
         .sil-btn:hover { background-color: #f43f5e; color: white; }
+        
+        .yukleniyor {
+            text-align: center;
+            font-weight: bold;
+            color: #64748b;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>36 Daireli Bina Otomasyon Kasa Sistemi</h2>
+    <h2>36 Daireli Ortak Canlı Kasa Sistemi</h2>
+    <div id="durumMesaji" class="yukleniyor">Bulut veri tabanına bağlanılıyor...</div>
 
-    <!-- Üst Panel: Kartlar ve Grafik -->
     <div class="ust-panel">
         <div class="ozet-paneli">
             <div class="kart gelir-kart">Toplam Gelir: <span id="topGelir">0.00</span> TL</div>
@@ -158,27 +159,24 @@ HTML
         </div>
     </div>
 
-    <!-- İşlem Ekleme Formu -->
     <h3>Yeni İşlem Kaydı</h3>
     <div class="form-grup">
         <input type="date" id="tarih">
         <select id="daire">
             <option value="Genel Gider">Genel Gider / Ortak Alan</option>
-            <!-- JavaScript buraya 1'den 36'ya kadar otomatik daire ekleyecek -->
         </select>
         <select id="tur">
             <option value="gelir">Gelir (+)</option>
             <option value="gider">Gider (-)</option>
         </select>
-        <input type="text" id="aciklama" placeholder="Açıklama (Örn: Ocak Ayı Aidatı, Diyafon Tamiri)">
+        <input type="text" id="aciklama" placeholder="Açıklama (Örn: Aidat Ödemesi)">
         <input type="number" id="tutar" placeholder="Tutar (TL)" min="0">
         <button class="ekle-btn" onclick="islemEkle()">Kayıt Ekle</button>
     </div>
 
     <button class="excel-btn" onclick="excelIndir()">📊 Excel Dosyası Olarak İndir</button>
 
-    <!-- İşlem Geçmişi Tablosu -->
-    <h3>Kasa Hareket Planı</h3>
+    <h3>Kasa Hareket Planı (Canlı Veri)</h3>
     <table>
         <thead>
             <tr>
@@ -190,17 +188,18 @@ HTML
                 <th>İşlem</th>
             </tr>
         </thead>
-        <tbody id="islemListesi">
-            <!-- Kayıtlar buraya listelenecek -->
-        </tbody>
+        <tbody id="islemListesi"></tbody>
     </table>
 </div>
 
 <script>
-    let islemler = JSON.parse(localStorage.getItem('binaIslemleri36Daire')) || [];
+    // Sizin Firebase linkiniz entegre edildi
+    const FIREBASE_URL = "https://bina-kasa-takip-default-rtdb.europe-west1.firebasedatabase.app";
+    
+    let islemler = [];
     let myChart = null;
 
-    // Sayfa açıldığında 1'den 36'ya kadar daireleri listeye otomatik ekle
+    // 36 Daire oluşturma
     const daireSelect = document.getElementById('daire');
     for (let i = 1; i <= 36; i++) {
         const opt = document.createElement('option');
@@ -208,17 +207,54 @@ HTML
         opt.innerText = `Daire ${i}`;
         daireSelect.appendChild(opt);
     }
-
-    // Bugünü otomatik tarih seç
     document.getElementById('tarih').valueAsDate = new Date();
+
+    // Buluttan verileri çekme fonksiyonu
+    async function verileriGetir() {
+        try {
+            const response = await fetch(`${FIREBASE_URL}/islemler.json`);
+            const data = await response.json();
+            
+            if (!data) {
+                islemler = [];
+            } else {
+                islemler = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            }
+            document.getElementById('durumMesaji').innerText = "🟢 Canlı Veri Tabanına Bağlandı";
+            arayuzGuncelle();
+        } catch (error) {
+            document.getElementById('durumMesaji').innerText = "🔴 Veri çekme hatası oluştu.";
+        }
+    }
+
+    // Buluta veri kaydetme fonksiyonu
+    async function veritabaninaKaydet(yeniIslem) {
+        try {
+            await fetch(`${FIREBASE_URL}/islemler.json`, {
+                method: 'POST',
+                body: JSON.stringify(yeniIslem)
+            });
+            verileriGetir(); 
+        } catch (error) {
+            alert("Veri kaydedilirken internet hatası oluştu!");
+        }
+    }
+
+    // Buluttan veri silme fonksiyonu
+    async function veritabanindanSil(firebaseId) {
+        try {
+            await fetch(`${FIREBASE_URL}/islemler/${firebaseId}.json`, {
+                method: 'DELETE'
+            });
+            verileriGetir(); 
+        } catch (error) {
+            alert("Veri silinirken hata oluştu!");
+        }
+    }
 
     function grafikGuncelle(gelir, gider) {
         const ctx = document.getElementById('kasaGrafik').getContext('2d');
-        
-        if (myChart) {
-            myChart.destroy(); // Eski grafiği temizle yoksa üst üste biner
-        }
-
+        if (myChart) myChart.destroy();
         myChart = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -232,24 +268,21 @@ HTML
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
+                plugins: { legend: { position: 'bottom' } }
             }
         });
     }
 
-    function guncelle() {
+    function arayuzGuncelle() {
         const liste = document.getElementById('islemListesi');
         liste.innerHTML = '';
         
         let totalGelir = 0;
         let totalGider = 0;
 
-        // Tarihe göre sıralama (en yeni en üstte)
         islemler.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
 
-        islemler.forEach((islem, index) => {
+        islemler.forEach((islem) => {
             const tutarNum = parseFloat(islem.tutar);
             if(islem.tur === 'gelir') {
                 totalGelir += tutarNum;
@@ -265,20 +298,16 @@ HTML
                 <td class="tur-${islem.tur}">${islem.tur === 'gelir' ? 'GELİR' : 'GİDER'}</td>
                 <td>${islem.aciklama}</td>
                 <td>${tutarNum.toFixed(2)} TL</td>
-                <td><button class="sil-btn" onclick="islemSil(${index})">Sil</button></td>
+                <td><button class="sil-btn" onclick="islemSil('${islem.id}')">Sil</button></td>
             </tr>`;
             liste.innerHTML += row;
         });
 
-        const netKasa = totalGelir - totalGider;
-
         document.getElementById('topGelir').innerText = totalGelir.toFixed(2);
         document.getElementById('topGider').innerText = totalGider.toFixed(2);
-        document.getElementById('netKasa').innerText = netKasa.toFixed(2);
+        document.getElementById('netKasa').innerText = (totalGelir - totalGider).toFixed(2);
 
-        // Grafiği ve yerel hafızayı güncelle
         grafikGuncelle(totalGelir, totalGider);
-        localStorage.setItem('binaIslemleri36Daire', JSON.stringify(islemler));
     }
 
     function islemEkle() {
@@ -289,30 +318,25 @@ HTML
         const tutar = document.getElementById('tutar').value;
 
         if(!tarih || !aciklama || !tutar) {
-            alert('Lütfen boş alanları doldurunuz!');
+            alert('Lütfen tüm alanları doldurunuz!');
             return;
         }
 
-        islemler.push({ tarih, daire, tur, aciklama, tutar });
-        guncelle();
+        const yeniIslem = { tarih, daire, tur, aciklama, tutar };
+        veritabaninaKaydet(yeniIslem);
 
         document.getElementById('aciklama').value = '';
         document.getElementById('tutar').value = '';
     }
 
-    function islemSil(index) {
-        if(confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
-            islemler.splice(index, 1);
-            guncelle();
+    function islemSil(firebaseId) {
+        if(confirm('Bu kaydı ortak veri tabanından silmek istediğinize emin misiniz?')) {
+            veritabanindanSil(firebaseId);
         }
     }
 
     function excelIndir() {
-        if(islemler.length === 0) {
-            alert('İndirilecek veri bulunamadı!');
-            return;
-        }
-        
+        if(islemler.length === 0) { alert('Veri yok!'); return; }
         const excelVerisi = islemler.map(islem => ({
             "Tarih": new Date(islem.tarih).toLocaleDateString('tr-TR'),
             "Daire / Yer": islem.daire,
@@ -320,15 +344,13 @@ HTML
             "Açıklama": islem.aciklama,
             "Tutar (TL)": parseFloat(islem.tutar)
         }));
-
         const s2c = XLSX.utils.json_to_sheet(excelVerisi);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, s2c, "Bina Kasa Defteri");
-        XLSX.writeFile(wb, "36_Daire_Bina_Kasa_Raporu.xlsx");
+        XLSX.writeFile(wb, "Ortak_Bina_Kasa_Raporu.xlsx");
     }
 
-    // Programı çalıştır
-    guncelle();
+    verileriGetir();
 </script>
 
 </body>
